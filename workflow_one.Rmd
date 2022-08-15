@@ -8,6 +8,35 @@ output: html_document
 ```{r setup}
 library(ascotraceR)
 library(stationaRy) # for weather data
+library(data.table)
+```
+
+
+Download weather for turret
+
+Potential trial to mimic SARDI fungicide trial in 2018.
+[Description of the trial at GRDC publications](https://grdc.com.au/resources-and-publications/grdc-update-papers/tab-content/grdc-update-papers/2019/02/ascochyta-blight-in-intensive-cropping-of-pulses)
+
+Lets see if we can download the weather data for this area
+```{r}
+met_stat <- as.data.table(get_station_metadata())
+
+turret_deets <- met_stat[name == "TURRETFIELD RESEARCH CENTRE"]
+turret_dat <- 
+  get_met_data(station_id = turret_deets$id,
+               years = 2018,
+               full_data = TRUE)
+
+setDT(turret_dat)
+turret_dat
+```
+Turretfield research station does not return data for 2018, we will try the next nearest stations
+
+```{r}
+met_stat[lat < -34.4 &
+            lat > -34.8 &
+            lon > 138.6 & 
+            lon < 139]
 ```
 
 
