@@ -19,113 +19,6 @@ Download weather for turret
 Potential trial to mimic SARDI fungicide trial in 2018.
 [Description of the trial at GRDC publications](https://grdc.com.au/resources-and-publications/grdc-update-papers/tab-content/grdc-update-papers/2019/02/ascochyta-blight-in-intensive-cropping-of-pulses)
 
-Lets see if we can download the weather data for this area
-```{r}
-met_stat <- as.data.table(get_station_metadata())
-
-turret_deets <- met_stat[name == "TURRETFIELD RESEARCH CENTRE"]
-turret_dat <- 
-  get_met_data(station_id = turret_deets$id,
-               years = 2018,
-               full_data = TRUE)
-
-setDT(turret_dat)
-setnames(turret_dat,old = "aa1_2",
-         new = "rain")
-
-test_dat <-
-  get_met_data(met_stat[lon < turret_deets$lon + 0.18 &
-           lon > turret_deets$lon - 0.18 &
-           lat < turret_deets$lat + 0.18 &
-           lat > turret_deets$lat - 0.18][4,id],
-           years = 2018,
-           full_data = TRUE
-)
-
-test_dat2
-```
-Turretfield research station does not return data for 2018, we will try the next nearest stations
-
-```{r}
-met_stat[lat < -34.4 &
-            lat > -34.8 &
-            lon > 138.6 & 
-            lon < 139]
-test_dat
-weather_dat
-```
-
-```{r}
-setDT(test_dat)
-test_dat[, rain := fcase(is.na(aa1_2), NA_real_,
-                         aa1_2 == 999.9, 0, 
-                         aa1_2 < 999.9, aa1_2)]
-test_dat[ , c("lon", "lat", "wd_sd"):=
-            .(139.000,-34.483,10)]
-
-
-f_dat <- 
-  format_weather(test_dat,
-               POSIXct_time = "time",
-               time_zone = "UTC",
-               temp = "temp",
-               rain = "rain",
-               ws = "ws",
-               wd = "wd",
-               wd_sd = "wd_sd",
-               station = "id",
-               lon = "lon",
-               lat = "lat")
-
-library(GSODR)
-tm_stat <- 
-  GSODR::get_GSOD(years = c(2017,2018,2019),
-                  station = "946810-99999")
-
-Tm24 <- 
-  lapply(seq_along(tm_stat$STNID),
-      function(x){
-        out <- impute_temperature(
-          start_h = 0, 
-          end_h = 23,
-          max_Tm = as.numeric(tm_stat[x,"MAX"]),
-          min_Tm = as.numeric(tm_stat[x,"MIN"]))
-        #cat(out)
-        return(out)
-      } 
-  )
-
-Tm24 <- unlist(Tm24)
-plot(Tm24[100:300],type = "l")
-
-f_dat <-
-  format_weather(
-    tm_stat,
-    YYYY = "YEAR",
-    MM = "MONTH",
-    DD = "DAY",
-    time_zone = "UTC",
-    temp = "TEMP",
-    rain = "PRCP",
-    ws = "WDSP",
-    wd = "",
-    wd_sd = "wd_sd",
-    station = "id",
-    lon = "lon",
-    lat = "lat"
-  )
-```
-
-```{r}
-td_agg <-
-  test_dat[ , .(wd = circular::mean.circular(wd,na.rm = TRUE,control.circular = "degrees"),
-                ws = mean(ws, na.rm = TRUE)),
-            by = data.table::mday(test_dat$time)
-            ]
-```
-
-
-
 ```{r get_power}
 np_w <- get_power(community = "ag",
                   lonlat = c(138.832,-34.553),
@@ -347,5 +240,6 @@ plot(y = s_ta5$infectious_gp/s_ta5$susceptible_gp,
 lines(y = s_ta3$infectious_gp/s_ta3$susceptible_gp,
      x = s_ta3$i_date,
      type = "l", col = "red")
+abline(v = c("2014-07-07","2014-08-29","2014-09-07"),col = "blue")
 
 ```
