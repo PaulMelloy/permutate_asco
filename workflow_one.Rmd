@@ -9,6 +9,8 @@ output: html_document
 library(ascotraceR)
 library(stationaRy) # for weather data
 library(data.table)
+library(ggplot2)
+library(nasapower)
 ```
 
 
@@ -122,3 +124,228 @@ td_agg <-
             ]
 ```
 
+
+
+```{r get_power}
+np_w <- get_power(community = "ag",
+                  lonlat = c(138.832,-34.553),
+                  pars = c("T2M","PRECTOTCORR","WD2M","WS2M"),
+                  temporal_api = "hourly",
+                  dates = c("2014-01-01","2014-12-30"),
+                  time_standard = "UTC")
+setDT(np_w)
+
+```
+
+
+```{r}
+# Add station id
+np_w[,id := "Turretfield"]
+
+# set standard deviation of wd
+np_w[,wdir_sd := 30]
+
+f_dat <-
+  format_weather(
+    np_w,
+    YYYY = "YEAR",
+    MM = "MO",
+    DD = "DY",
+    hh = "HR",
+    time_zone = "UTC",
+    temp = "T2M",
+    rain = "PRECTOTCORR",
+    ws = "WS2M",
+    wd = "WD2M",
+    wd_sd = "wdir_sd",
+    station = "id",
+    lon = "LON",
+    lat = "LAT"
+  )
+f_dat[,.(temp = mean(temp),
+         rain = sum(rain)),
+      by = .(YYYY,MM,DD)][MM >= 6 & MM <= 10,]
+```
+
+```{r}
+T1 <- Sys.time()
+ta1 <- trace_asco(weather = f_dat,
+                  paddock_length = 10,
+                  paddock_width = 20,
+                  sowing_date = "2014-06-06",
+                  harvest_date = "2014-09-17", # Guesstimated 
+                  initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                  seeding_rate = 50, # Desi
+                  primary_infection_foci = expand.grid(x = 1:20,
+                                                       y = 1:10,
+                                                       load = 5),
+                  spores_per_gp_per_wet_hour = 0.22) # kyabra = 0.6
+T2 <- Sys.time()
+T2 - T1
+
+s_ta1 <- summarise_trace(ta1)
+td_ta1 <- tidy_trace(ta1)
+```
+
+
+```{r}
+ggplot(data = subset(tidy_trace(ta1), i_day == 105),
+       aes(x = x, y = y, fill = infectious_gp/susceptible_gp)) +
+       geom_tile()
+
+
+
+plot(y = s_ta1$infectious_gp/s_ta1$susceptible_gp,
+     x = s_ta1$i_date,
+     type = "l")
+```
+
+How does increasing the amount of starting inoculum change the results?
+
+```{r}
+T1 <- Sys.time()
+ta2 <- trace_asco(weather = f_dat,
+                  paddock_length = 10,
+                  paddock_width = 20,
+                  sowing_date = "2014-06-06",
+                  harvest_date = "2014-09-17", # Guesstimated 
+                  initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                  seeding_rate = 50, # Desi
+                  primary_infection_foci = expand.grid(x = 1:20,
+                                                       y = 1:10,
+                                                       load = 10),
+                  spores_per_gp_per_wet_hour = 0.22) # kyabra = 0.6
+T2 <- Sys.time()
+T2 - T1
+
+s_ta2 <- summarise_trace(ta2)
+td_ta2 <- tidy_trace(ta2)
+```
+
+
+```{r}
+ggplot(data = subset(td_ta2, i_day == 105),
+       aes(x = x, y = y, fill = infectious_gp/susceptible_gp)) +
+       geom_tile()
+
+
+
+plot(y = s_ta2$infectious_gp/s_ta2$susceptible_gp,
+     x = s_ta2$i_date,
+     type = "l")
+```
+
+How does changing the susceptibility change the results?
+
+```{r}
+T1 <- Sys.time()
+ta3 <- trace_asco(weather = f_dat,
+                  paddock_length = 10,
+                  paddock_width = 20,
+                  sowing_date = "2014-06-06",
+                  harvest_date = "2014-09-17", # Guesstimated 
+                  initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                  seeding_rate = 50, # Desi
+                  primary_infection_foci = expand.grid(x = 1:20,
+                                                       y = 1:10,
+                                                       load = 5),
+                  spores_per_gp_per_wet_hour = 0.6) # kyabra = 0.6
+T2 <- Sys.time()
+T2 - T1
+
+s_ta3 <- summarise_trace(ta3)
+td_ta3 <- tidy_trace(ta3)
+```
+
+
+```{r}
+ggplot(data = subset(td_ta3, i_day == 105),
+       aes(x = x, y = y, fill = infectious_gp/susceptible_gp)) +
+       geom_tile()
+
+
+
+plot(y = s_ta3$infectious_gp/s_ta3$susceptible_gp,
+     x = s_ta3$i_date,
+     type = "l")
+lines(y = s_ta2$infectious_gp/s_ta2$susceptible_gp,
+     x = s_ta2$i_date,
+     type = "l", col = "red")
+```
+
+What if we run this till christmas. Does the crop stop growing?
+
+```{r}
+T1 <- Sys.time()
+ta4 <- trace_asco(weather = f_dat,
+                  paddock_length = 10,
+                  paddock_width = 20,
+                  sowing_date = "2014-06-06",
+                  harvest_date = "2014-12-30", # Guesstimated 
+                  initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                  seeding_rate = 50, # Desi
+                  primary_infection_foci = expand.grid(x = 1:20,
+                                                       y = 1:10,
+                                                       load = 5),
+                  spores_per_gp_per_wet_hour = 0.2) # kyabra = 0.6
+T2 <- Sys.time()
+T2 - T1
+
+s_ta4 <- summarise_trace(ta4)
+td_ta4 <- tidy_trace(ta4)
+```
+
+
+```{r}
+ggplot(data = subset(td_ta4, i_day == 105),
+       aes(x = x, y = y, fill = infectious_gp/susceptible_gp)) +
+       geom_tile()
+
+
+
+plot(y = s_ta4$infectious_gp/s_ta4$susceptible_gp,
+     x = s_ta4$i_date,
+     type = "l")
+
+```
+
+
+Test adding fungicide dates?
+
+```{r}
+T1 <- Sys.time()
+ta5 <- trace_asco(weather = f_dat,
+                  paddock_length = 10,
+                  paddock_width = 20,
+                  sowing_date = "2014-06-06",
+                  harvest_date = "2014-10-30", # Guesstimated 
+                  initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                  seeding_rate = 50, # Desi
+                  primary_infection_foci = expand.grid(x = 1:20,
+                                                       y = 1:10,
+                                                       load = 5),
+                  spores_per_gp_per_wet_hour = 0.6, # kyabra = 0.6
+                  fungicide_dates = c("2014-07-07","2014-08-29","2014-09-07")) 
+T2 <- Sys.time()
+T2 - T1
+
+s_ta5 <- summarise_trace(ta5)
+td_ta5 <- tidy_trace(ta5)
+```
+
+
+```{r}
+ggplot(data = subset(td_ta5, i_day == 105),
+       aes(x = x, y = y, fill = infectious_gp/susceptible_gp)) +
+       geom_tile()
+
+
+
+plot(y = s_ta5$infectious_gp/s_ta5$susceptible_gp,
+     x = s_ta5$i_date,
+     type = "l")
+lines(y = s_ta3$infectious_gp/s_ta3$susceptible_gp,
+     x = s_ta3$i_date,
+     type = "l", col = "red")
+
+```
