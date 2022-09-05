@@ -359,7 +359,7 @@ library("doParallel")
 
 ```{r}
 T1 <- Sys.time()
-cl <- makeCluster(detectCores()-1)
+cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
 perm_sr <- foreach(sr = seq(from = 0.25,
@@ -398,6 +398,122 @@ for(i in 1:length(perm_sr)) {
     type = "l",
     ylim = c(0, 0.5)
   )
+     if(i>1){
+  i_2 <- summarise_trace(perm_sr[[i-1]])
+  lines(y = i_2$infectious_gp/i_2$susceptible_gp,
+       x = i_2$i_date,
+       type = "l", col = "red")}
+    if(i>2){
+  i_3 <- summarise_trace(perm_sr[[i-2]])
+  lines(y = i_3$infectious_gp/i_3$susceptible_gp,
+       x = i_3$i_date,
+       type = "l", col = "maroon")}
+  
+}
+```
+
+## Permutate fungicide sprays  
+
+First I need to establish the main days when spores were spread.
+
+`ta3` should show this in the dates when `exposed_gps` increased
+
+```{r}
+# find the change in exposed gp between days
+s_ta3[,exposed_diff := exposed_gp - shift(exposed_gp)]
+
+crutial_days <- s_ta3[exposed_diff >0, i_date]
+```
+now to create a function to randomly sample dates.
+The function will not sample dates within a specified timeframe of each other and 
+has the option of how many dates to sample.
+
+```{r}
+sample_dates <- function(dates,
+                         n = 3,
+                         min_diff = 5,
+                         max_itter = 100) {
+  for (i in 1:n) {
+    itter <- 1
+    if (i == 1) {
+      out <- as.Date(vector(mode = "character", length = n))
+      out[i] <- sample(dates,
+                       size = 1)
+      next
+    }
+    while (is.na(out[i])) {
+      next_date <- sample(dates, size = 1)
+      diff1 <- min(abs(next_date - out), na.rm = TRUE)
+      if (diff1 >= min_diff) {
+        out[i] <- next_date
+      }
+      itter <- itter + 1
+        if(itter>= max_itter) break
+    }
+  }
+  return(out)
+}
+f_dates <- sample_dates(crutial_days)
+f_dates
+```
+
+Create list of fungicide applications  
+
+```{r}
+f_scenarios <-lapply(1:20, FUN = function(x) sample_dates(dates = crutial_days))
+```
+
+
+
+```{r}
+T1 <- Sys.time()
+cl <- makeCluster(detectCores()-1)
+registerDoParallel(cl)
+
+perm_fg <- foreach(fcide = f_scenarios,
+                   w = f_dat,
+                   .packages = "ascotraceR", 
+                   .inorder=FALSE) %dopar% {
+                     trace_asco(
+                       weather = f_dat,
+                       paddock_length = 10,
+                       paddock_width = 20,
+                       sowing_date = "2014-06-06",
+                       harvest_date = "2014-10-01", # Guesstimated
+                       initial_infection = "2014-06-26",# estimated "Early in the season" 20 days after sowing
+                       seeding_rate = 40,
+                       primary_infection_foci = expand.grid(x = 1:20,
+                                                            y = 1:10,
+                                                            load = 5),
+                       spores_per_gp_per_wet_hour = 0.7,
+                       fungicide_dates = fcide
+                     ) 
+                   }
+stopCluster(cl)
+
+T2 <- Sys.time()
+T2 - T1
+
+```
+
+
+
+```{r}
+for(i in 1:length(perm_sr)) {
+  i_1 <- summarise_trace(perm_sr[[i]])
+  plot(
+    y = i_1$infectious_gp / i_1$susceptible_gp,
+    x = i_1$i_date,
+    type = "l",
+    ylim = c(0, 0.5),
+    xlab = "Date",
+    ylab = "Percent infected growing points"
+  )
+  abline(v = f_scenarios[[i]], 
+         col = "blue")
+  text(x = f_scenarios[[i]][1],
+       y = 0.45,
+       labels = paste("AUDPC = ",unique(i_1$AUDPC)))
   #   if(i>1){
   # lines(y = perm_sr[[i-1]]$infectious_gp/perm_sr[[i-1]]$susceptible_gp,
   #      x = perm_sr[[i-1]]$i_date,
