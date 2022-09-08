@@ -464,8 +464,8 @@ f_scenarios <-lapply(1:10, FUN = function(x) sample_dates(dates = crutial_days))
 
 
 ```{r}
-for(q in 1:50){
-  f_scenarios <-lapply(1:10, FUN = function(x) sample_dates(dates = crutial_days))
+for(q in 1:20){
+  f_scenarios <-lapply(1:30, FUN = function(x) sample_dates(dates = crutial_days))
 
   T1 <- Sys.time()
   cl <- makeCluster(detectCores()-1)
@@ -476,6 +476,7 @@ for(q in 1:50){
     w = f_dat,
     .packages = "ascotraceR", 
     .inorder=FALSE) %dopar% {
+      options(digits.secs=2)
       traced <-
         trace_asco(
           weather = f_dat,
@@ -499,7 +500,7 @@ for(q in 1:50){
       
       save("l_dat",
            file = paste0(
-             "./Fungicide_runs/",
+             "./Fungicide4_runs/",
              format(Sys.time(),
                     format = "%y%m%d_%H%M%OS"),
              "_perm_fg.Rdata"
@@ -546,6 +547,86 @@ for(i in 1:length(perm_fg)) {
   # lines(y = perm_sr[[i-1]]$infectious_gp/perm_sr[[i-1]]$susceptible_gp,
   #      x = perm_sr[[i-1]]$i_date,
   #      type = "l", col = "maroon")}
+}
+```
+
+
+### Four spray scenarios
+
+```{r}
+for(q in 1:5) {
+  # run preliminary simulation to find crutial days
+  prelim <- trace_asco(
+    weather = f_dat,
+    paddock_length = 10,
+    paddock_width = 20,
+    sowing_date = "2014-06-06",
+    harvest_date = "2014-10-30",
+    # Guesstimated
+    initial_infection = "2014-06-26",
+    # estimated "Early in the season" 20 days after sowing
+    seeding_rate = 50,
+    # Desi
+    primary_infection_foci = expand.grid(
+      x = 1:20,
+      y = 1:10,
+      load = 5
+    ),
+    spores_per_gp_per_wet_hour = 0.6
+  ) # kyabra = 0.6
+  
+  s_prelim <- summarise_trace(prelim)
+  
+  # find the change in exposed gp between days
+  s_prelim[, exposed_diff := exposed_gp - shift(exposed_gp)]
+  
+  crutial_days <- s_prelim[exposed_diff > 0, i_date]
+  
+  f_scenarios <-lapply(1:100, FUN = function(x) sample_dates(dates = crutial_days,
+                                                             n = 4))
+
+  cl <- makeCluster(detectCores()-1)
+  registerDoParallel(cl)
+
+  foreach(
+    fcide = f_scenarios,
+    w = f_dat,
+    .packages = "ascotraceR", 
+    .inorder=FALSE) %dopar% {
+      options(digits.secs=2)
+      traced <-
+        trace_asco(
+          weather = f_dat,
+          paddock_length = 10,
+          paddock_width = 20,
+          sowing_date = "2014-06-06",
+          harvest_date = "2014-10-01",
+          # Guesstimated
+          initial_infection = "2014-06-26",
+          # estimated "Early in the season" 20 days after sowing
+          seeding_rate = 40,
+          primary_infection_foci = expand.grid(x = 1:20,
+                                               y = 1:10,
+                                               load = 5),
+          spores_per_gp_per_wet_hour = 0.6,
+          fungicide_dates = fcide
+        )
+      l_dat <-
+        list(f_dates = fcide,
+             trace_summary = summarise_trace(traced))
+      
+      save("l_dat",
+           file = paste0(
+             "./Fungicide4_runs/",
+             format(Sys.time(),
+                    format = "%y%m%d_%H%M%OS"),
+             "_perm_fg.Rdata"
+           ))
+    }
+  
+  stopCluster(cl)
+}
+
 }
 ```
 
